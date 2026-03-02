@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
+const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 const ImageIcon = () => (
@@ -314,6 +314,8 @@ export default function PromptGenPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<any>(null);
+    const [resultTab, setResultTab] = useState<"prompt" | "generate-video">("prompt");
+    const [promptCopied, setPromptCopied] = useState(false);
     // For viewing a history record
     const [viewingRecord, setViewingRecord] = useState<any>(null);
     const [loadingRecord, setLoadingRecord] = useState(false);
@@ -332,6 +334,7 @@ export default function PromptGenPage() {
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || "Gagal generate prompt");
             setResult(json.data);
+            setResultTab("prompt");
         } catch (e) {
             setError(e instanceof Error ? e.message : "Gagal terhubung ke server");
         } finally {
@@ -351,7 +354,31 @@ export default function PromptGenPage() {
         }
     };
 
-    const handleReset = () => { setResult(null); setFile(null); setError(null); };
+    const handleReset = () => { setResult(null); setFile(null); setError(null); setResultTab("prompt"); setPromptCopied(false); };
+
+
+    const getPromptText = (): string => {
+        if (!result) return '';
+        if (result.format === 'text' && result.text) return result.text;
+        if (result.format === 'json' && result.json) {
+            // Prefer Grok-specific platform prompt
+            const grokPrompt = result.json?.platformPrompts?.grok || result.json?.platformPrompts?.universal;
+            if (grokPrompt) return grokPrompt;
+            return JSON.stringify(result.json, null, 2);
+        }
+        return result.text || '';
+    };
+
+    const handleSwitchToGenerate = () => {
+        setResultTab('generate-video');
+        const text = getPromptText();
+        if (text) {
+            navigator.clipboard.writeText(text).then(() => {
+                setPromptCopied(true);
+                setTimeout(() => setPromptCopied(false), 3000);
+            }).catch(() => {});
+        }
+    };
 
     return (
         <>
@@ -430,7 +457,8 @@ export default function PromptGenPage() {
                         {result ? (
                             /* Result view */
                             <div style={{ animation: "fadeInUp 0.3s ease" }}>
-                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", marginBottom: "24px" }}>
+                                {/* Header */}
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", marginBottom: "20px" }}>
                                     <div>
                                         <p style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "3px" }}>Hasil Prompt</p>
                                         <p style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{result.originalName} · {result.mediaType === "image" ? "🖼 Gambar" : "🎬 Video"}</p>
@@ -441,26 +469,114 @@ export default function PromptGenPage() {
                                         <button onClick={handleReset} style={{ padding: "8px 16px", border: "1px solid var(--border)", borderRadius: "8px", background: "var(--bg-primary)", color: "var(--text-secondary)", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>← Generate Baru</button>
                                     </div>
                                 </div>
-                                {result.format === "text" && result.text && (
-                                    <div style={{ border: "1px solid var(--border)", borderRadius: "10px", overflow: "hidden" }}>
-                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-secondary)" }}>
-                                            <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)" }}>📄 Prompt Lengkap</span>
-                                            <CopyButton text={result.text} />
-                                        </div>
-                                        <div style={{ padding: "18px" }}>
-                                            <pre style={{ fontFamily: "monospace", fontSize: "12px", lineHeight: 1.8, color: "var(--text-primary)", whiteSpace: "pre-wrap", wordBreak: "break-word", margin: 0 }}>{result.text}</pre>
-                                        </div>
-                                    </div>
+
+                                {/* Result tabs */}
+                                <div style={{ display: "flex", borderBottom: "1px solid var(--border)", marginBottom: "20px" }}>
+                                    {([
+                                        { k: "prompt", l: "Hasil Prompt" },
+                                        { k: "generate-video", l: "🌌 Generate Video" },
+                                    ] as const).map(({ k, l }) => (
+                                        <button
+                                            key={k}
+                                            onClick={() => k === "generate-video" ? handleSwitchToGenerate() : setResultTab("prompt")}
+                                            style={{
+                                                padding: "10px 18px", background: "none", border: "none",
+                                                borderBottom: resultTab === k ? "2px solid var(--text-primary)" : "2px solid transparent",
+                                                marginBottom: "-1px", cursor: "pointer",
+                                                fontSize: "13px", fontWeight: resultTab === k ? 700 : 500,
+                                                color: resultTab === k ? "var(--text-primary)" : "var(--text-muted)",
+                                                whiteSpace: "nowrap", transition: "color 0.15s",
+                                            }}
+                                        >{l}</button>
+                                    ))}
+                                </div>
+
+                                {/* Hasil Prompt tab */}
+                                {resultTab === "prompt" && (
+                                    <>
+                                        {result.format === "text" && result.text && (
+                                            <div style={{ border: "1px solid var(--border)", borderRadius: "10px", overflow: "hidden" }}>
+                                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-secondary)" }}>
+                                                    <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)" }}>📄 Prompt Lengkap</span>
+                                                    <CopyButton text={result.text} />
+                                                </div>
+                                                <div style={{ padding: "18px" }}>
+                                                    <pre style={{ fontFamily: "monospace", fontSize: "12px", lineHeight: 1.8, color: "var(--text-primary)", whiteSpace: "pre-wrap", wordBreak: "break-word", margin: 0 }}>{result.text}</pre>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {result.format === "json" && result.json && <JsonResultDisplay data={result.json} />}
+                                        {result.format === "json" && !result.json && result.text && (
+                                            <div style={{ border: "1px solid var(--border)", borderRadius: "10px", overflow: "hidden" }}>
+                                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-secondary)" }}>
+                                                    <span style={{ fontSize: "13px", fontWeight: 700 }}>📄 Prompt (Text fallback)</span>
+                                                    <CopyButton text={result.text} />
+                                                </div>
+                                                <div style={{ padding: "18px" }}>
+                                                    <pre style={{ fontFamily: "monospace", fontSize: "12px", lineHeight: 1.8, whiteSpace: "pre-wrap", wordBreak: "break-word", margin: 0 }}>{result.text}</pre>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
-                                {result.format === "json" && result.json && <JsonResultDisplay data={result.json} />}
-                                {result.format === "json" && !result.json && result.text && (
-                                    <div style={{ border: "1px solid var(--border)", borderRadius: "10px", overflow: "hidden" }}>
-                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-secondary)" }}>
-                                            <span style={{ fontSize: "13px", fontWeight: 700 }}>📄 Prompt (Text fallback)</span>
-                                            <CopyButton text={result.text} />
+
+                                {/* Generate Video tab — Grok Aurora webview */}
+                                {resultTab === "generate-video" && (
+                                    <div style={{ animation: "fadeIn 0.25s ease" }}>
+                                        {/* Prompt ready banner */}
+                                        <div style={{ padding: "12px 16px", border: `1px solid ${promptCopied ? "var(--success)" : "var(--border)"}`, borderRadius: "10px", background: promptCopied ? "rgba(16,185,129,0.06)" : "var(--bg-secondary)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", marginBottom: "14px", transition: "all 0.3s" }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                                                <span style={{ fontSize: "16px" }}>{promptCopied ? "✅" : "📋"}</span>
+                                                <div>
+                                                    <p style={{ fontSize: "13px", fontWeight: 700, color: promptCopied ? "var(--success)" : "var(--text-primary)", marginBottom: "2px" }}>
+                                                        {promptCopied ? "Prompt berhasil disalin!" : "Prompt siap digunakan"}
+                                                    </p>
+                                                    <p style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                                                        {promptCopied ? "Paste ke Grok Aurora di bawah ini" : "Klik salin lalu paste ke Grok Aurora"}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <CopyButton text={getPromptText()} />
                                         </div>
-                                        <div style={{ padding: "18px" }}>
-                                            <pre style={{ fontFamily: "monospace", fontSize: "12px", lineHeight: 1.8, whiteSpace: "pre-wrap", wordBreak: "break-word", margin: 0 }}>{result.text}</pre>
+
+                                        {/* Open in new tab button */}
+                                        <a
+                                            href="https://grok.com"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            style={{
+                                                display: "flex", alignItems: "center", justifyContent: "space-between",
+                                                padding: "12px 16px", border: "1px solid var(--border)", borderRadius: "10px",
+                                                background: "var(--bg-primary)", textDecoration: "none", marginBottom: "14px",
+                                                transition: "background 0.15s",
+                                            }}
+                                            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--bg-secondary)"; }}
+                                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--bg-primary)"; }}
+                                        >
+                                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                                                <span style={{ fontSize: "20px" }}>🌌</span>
+                                                <div>
+                                                    <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "1px" }}>Buka Grok Aurora</p>
+                                                    <p style={{ fontSize: "11px", color: "var(--text-muted)" }}>grok.com — buka di tab baru</p>
+                                                </div>
+                                            </div>
+                                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" style={{ color: "var(--text-muted)", flexShrink: 0 }}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                        </a>
+
+                                        {/* Grok iframe */}
+                                        <div style={{ border: "1px solid var(--border)", borderRadius: "12px", overflow: "hidden", background: "var(--bg-secondary)" }}>
+                                            <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: "8px" }}>
+                                                <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "var(--success)", display: "inline-block" }}></span>
+                                                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)" }}>grok.com</span>
+                                                <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "auto" }}>Salin prompt lalu paste di sini</span>
+                                            </div>
+                                            <iframe
+                                                src="https://grok.com"
+                                                title="Grok Aurora"
+                                                style={{ width: "100%", height: "600px", border: "none", display: "block" }}
+                                                allow="clipboard-read; clipboard-write"
+                                                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+                                            />
                                         </div>
                                     </div>
                                 )}

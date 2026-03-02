@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ThemeProvider } from "../components/ThemeProvider";
 import { Sidebar } from "../components/Sidebar";
 
@@ -12,6 +13,14 @@ export default function DashboardLayout({
     children: React.ReactNode;
 }) {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const router = useRouter();
+
+    useEffect(() => {
+        const API = process.env.NEXT_PUBLIC_API_URL || "/api";
+        fetch(`${API}/auth/me`, { credentials: "include" })
+            .then((r) => { if (r.status === 401) router.push("/login"); })
+            .catch(() => {});
+    }, [router]);
 
     return (
         <ThemeProvider>
@@ -56,7 +65,7 @@ export default function DashboardLayout({
                         padding: "0 20px",
                     }}
                 >
-                    <span style={{ fontWeight: 900, fontSize: "18px", letterSpacing: "-1px", color: "var(--text-primary)" }}>ATMSTUDIO</span>
+                    <span style={{ fontWeight: 900, fontSize: "18px", letterSpacing: "-1px", color: "var(--text-primary)" }}>MimicAI</span>
                     <button
                         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                         style={{ color: "var(--text-secondary)", padding: "8px", background: "none", border: "none", cursor: "pointer" }}

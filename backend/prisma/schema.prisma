@@ -1,4 +1,3 @@
-// This is your Prisma schema file
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,21 +7,39 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id        String             @id @default(cuid())
+  googleId  String             @unique
+  email     String             @unique
+  name      String
+  avatar    String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  analyses  VideoAnalysis[]
+  bookmarks TrendingBookmark[]
+}
+
 model VideoAnalysis {
-  id          String   @id @default(cuid())
-  fileName    String
-  originalName String
-  fileSize    Int
-  mimeType    String
-  duration    Float?
-  title       String?
-  summary     String?
-  analysis    Json
-  flowText    String   @db.Text
-  flowJson    Json
-  tags        String[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String   @id @default(cuid())
+  userId           String?
+  user             User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fileName         String
+  originalName     String
+  fileSize         Int
+  mimeType         String
+  duration         Float?
+  title            String?
+  summary          String?
+  analysis         Json
+  flowText         String   @db.Text
+  flowJson         Json
+  tags             String[]
+  isFavorite       Boolean  @default(false)
+  notes            String?  @db.Text
+  generatedScripts Json?
+  scriptNiche      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model PromptGenHistory {
@@ -30,13 +47,40 @@ model PromptGenHistory {
   originalName String
   fileSize     Int
   mimeType     String
-  mediaType    String   // "image" | "video"
-  lang         String   // "id" | "en"
-  format       String   // "text" | "json"
+  mediaType    String
+  lang         String
+  format       String
   promptText   String   @db.Text
   promptJson   Json?
-  userId       String?  // reserved for future Google SSO
+  userId       String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
 
+model TrendingVideo {
+  id            String             @id @default(cuid())
+  title         String
+  niche         String
+  viralScore    Int
+  views         String
+  hookHighlight String
+  whyViral      String
+  analysisData  Json
+  gradientFrom  String
+  gradientTo    String
+  isActive      Boolean            @default(true)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  bookmarks     TrendingBookmark[]
+}
+
+model TrendingBookmark {
+  id              String        @id @default(cuid())
+  userId          String
+  trendingVideoId String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trendingVideo   TrendingVideo @relation(fields: [trendingVideoId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+
+  @@unique([userId, trendingVideoId])
+}
