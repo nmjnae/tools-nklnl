@@ -1,0 +1,42 @@
+// This is your Prisma schema file
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model VideoAnalysis {
+  id          String   @id @default(cuid())
+  fileName    String
+  originalName String
+  fileSize    Int
+  mimeType    String
+  duration    Float?
+  title       String?
+  summary     String?
+  analysis    Json
+  flowText    String   @db.Text
+  flowJson    Json
+  tags        String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PromptGenHistory {
+  id           String   @id @default(cuid())
+  originalName String
+  fileSize     Int
+  mimeType     String
+  mediaType    String   // "image" | "video"
+  lang         String   // "id" | "en"
+  format       String   // "text" | "json"
+  promptText   String   @db.Text
+  promptJson   Json?
+  userId       String?  // reserved for future Google SSO
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
